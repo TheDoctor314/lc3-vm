@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use std::{mem::size_of, path::Path};
+use std::path::Path;
 
 pub struct Vm {
     memory: Vec<u16>,
@@ -19,14 +19,15 @@ impl Vm {
     }
 
     pub fn read_image(&mut self, file: impl AsRef<Path>) -> Result<()> {
+        let u16_len = std::mem::size_of::<u16>();
         let data = std::fs::read(file)?;
 
-        let (origin, data) = data.split_at(size_of::<u16>());
+        let (origin, data) = data.split_at(u16_len);
         let origin = u16::from_be_bytes(origin.try_into().unwrap());
 
         self.pc = origin;
 
-        let len = data.len() / size_of::<u16>();
+        let len = data.len() / u16_len;
         if len > u16::MAX as _ {
             bail!(
                 "Input file too large - must not be greater than {} bytes",
@@ -36,7 +37,7 @@ impl Vm {
 
         let dst = &mut self.memory[(origin as usize)..(origin as usize + len)];
 
-        for (dst, src) in dst.iter_mut().zip(data.chunks(size_of::<u16>())) {
+        for (dst, src) in dst.iter_mut().zip(data.chunks(u16_len)) {
             *dst = u16::from_be_bytes(src.try_into().unwrap());
         }
 
@@ -185,7 +186,7 @@ impl Vm {
     }
 }
 
-fn sign_ext(mut val: u16, bits: u16) -> u16 {
+const fn sign_ext(mut val: u16, bits: u16) -> u16 {
     val &= (1 << bits) - 1;
 
     if (val >> (bits - 1) & 1) != 0 {

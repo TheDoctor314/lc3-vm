@@ -190,7 +190,7 @@ const fn sign_ext(mut val: u16, bits: u16) -> u16 {
     val &= (1 << bits) - 1;
 
     if (val >> (bits - 1) & 1) != 0 {
-        val |= 0xFF << bits;
+        val |= 0xFFFF << bits;
     }
 
     val
@@ -203,6 +203,7 @@ impl Default for Vm {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
 enum Opcode {
     Br = 0b0000,
     Add = 0b0001,
@@ -239,4 +240,15 @@ pub enum Flag {
     Pos = 1,
     Zero = 2,
     Neg = 4,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sign_ext() {
+        assert_eq!(sign_ext(0b10011, 5), 0xfff3);
+        assert_eq!(sign_ext(0x30, 5), 0xfff0);
+    }
 }

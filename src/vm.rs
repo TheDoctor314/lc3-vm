@@ -1,5 +1,10 @@
 use anyhow::{bail, Result};
-use std::path::Path;
+use std::{
+    io::{stdout, Write},
+    path::Path,
+};
+
+use crate::getch;
 
 pub struct Vm {
     memory: Vec<u16>,
@@ -159,7 +164,61 @@ impl Vm {
                 }
                 Opcode::Trap => {
                     // implement traps in assembly or rust?
-                    todo!()
+                    self.reg[7] = self.pc;
+                    match inst & 0xFF {
+                        0x20 => {
+                            self.reg[0] = getch().unwrap_or_default() as u16;
+                            self.set_cc(0);
+                        }
+                        0x21 => {
+                            let byte = self.reg[0] as u8;
+                            let _ = stdout().write(&[byte]).unwrap();
+                        }
+                        0x22 => {
+                            let addr = self.reg[0] as usize;
+                            let slice = &self.memory[addr..];
+                            let end = slice.iter().position(|w| *w == 0x0000).unwrap_or_default();
+                            let slice_to_print = &slice[..end];
+
+                            let mut stdout = stdout().lock();
+
+                            for &word in slice_to_print {
+                                let _ = stdout.write(&[word as u8]).unwrap();
+                            }
+
+                            stdout.flush().unwrap();
+                        }
+                        0x23 => {
+                            let mut stdout = stdout().lock();
+                            write!(stdout, "Enter a character: ").unwrap();
+                            stdout.flush().unwrap();
+
+                            let ch = getch().unwrap_or_default();
+                            let _ = stdout.write(&[ch]).unwrap();
+                        }
+                        0x24 => {
+                            let addr = self.reg[0] as usize;
+                            let slice = &self.memory[addr..];
+
+                            let mut stdout = stdout().lock();
+
+                            for &word in slice {
+                                let bytes = u16::to_le_bytes(word);
+                                if bytes[1] != 0 {
+                                    let _ = stdout.write(&bytes).unwrap();
+                                } else {
+                                    let _ = stdout.write(&bytes[..1]).unwrap();
+                                }
+                            }
+
+                            stdout.flush().unwrap();
+                        }
+                        0x25 => {
+                            println!("HALT");
+                            running = false;
+                        }
+                        _ => unimplemented!("Bad trap"),
+                    }
                 }
                 Opcode::Rti | Opcode::Reserved => unimplemented!("Bad opcode"),
             }

@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.60"
-nix = { version = "0.24.2", default-features = false, features = ["term", "event"] }
+nix = { version = "0.24.2", default-features = false, features = ["term", "poll", "time"] }

@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use std::{
     io::{stdout, Write},
+    os::unix::prelude::AsRawFd,
     path::Path,
 };
 
@@ -12,6 +13,11 @@ pub struct Vm {
     reg: [u16; 8],
     psr: u16,
 }
+
+const KBSR: u16 = 0xFE00;
+const KBDR: u16 = 0xFE02;
+const DSR: u16 = 0xFE04;
+const DDR: u16 = 0xFE06;
 
 impl Vm {
     pub fn new(pc: u16, psr: u16) -> Self {
@@ -285,14 +291,39 @@ impl Vm {
         }
     }
 
-    // TODO: Implement memeory mapped registers
     fn read_mem(&self, addr: u16) -> u16 {
-        self.memory[addr as usize]
+        match addr {
+            KBSR => {
+                if is_ready_to_read() {
+                    0x80
+                } else {
+                    0
+                }
+            }
+            KBDR => {
+                if self.read_mem(KBSR) != 0 {
+                    getch().unwrap_or_default() as u16
+                } else {
+                    0
+                }
+            }
+            DSR => 0x80,
+            DDR => 0,
+            _ => self.memory[addr as usize],
+        }
     }
 
-    // TODO: Implement memeory mapped registers
     fn write_mem(&mut self, addr: u16, val: u16) {
-        self.memory[addr as usize] = val;
+        match addr {
+            // do nothing
+            KBSR | KBDR | DSR => (),
+            DDR => {
+                let mut stdout = stdout().lock();
+                let _ = stdout.write(&[val as u8]).unwrap();
+                stdout.flush().unwrap();
+            }
+            _ => self.memory[addr as usize] = val,
+        }
     }
 
     fn set_cc(&mut self, r: usize) {
@@ -315,6 +346,20 @@ const fn sign_ext(mut val: u16, bits: u16) -> u16 {
     }
 
     val
+}
+
+fn is_ready_to_read() -> bool {
+    use nix::sys::{
+        select::*,
+        time::{TimeVal, TimeValLike},
+    };
+
+    let mut read_fds = FdSet::default();
+    read_fds.insert(std::io::stdin().as_raw_fd());
+
+    let mut timeout: TimeVal = TimeValLike::zero();
+
+    select(1, &mut read_fds, None, None, &mut timeout).is_ok()
 }
 
 impl Default for Vm {

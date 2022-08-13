@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use log::info;
 use std::{
     io::{stdout, Write},
     os::unix::prelude::AsRawFd,
@@ -64,7 +65,7 @@ impl Vm {
 
             let op: Opcode = (inst >> 12).try_into().unwrap();
 
-            eprintln!("inst: {inst:#x} pc: {:#x}", self.pc - 1);
+            info!("inst: {inst:#x} pc: {:#x}", self.pc - 1);
 
             match op {
                 Opcode::Br => {
@@ -72,7 +73,7 @@ impl Vm {
                     let current_nzp = self.psr & 0b111;
                     let offset = sign_ext(inst, 9);
 
-                    eprintln!(
+                    info!(
                         "Br current: {}, desired: {}, offset: {:#x}",
                         current_nzp, nzp, offset
                     );
@@ -88,13 +89,13 @@ impl Vm {
                     if inst & (1 << 5) != 0 {
                         let imm5 = sign_ext(inst, 5);
 
-                        eprintln!("Add r{dr}, r{sr1}, #{imm5}");
+                        info!("Add r{dr}, r{sr1}, #{imm5}");
 
                         self.reg[dr] = self.reg[sr1] + imm5;
                     } else {
                         let sr2 = (inst & 0b111) as usize;
 
-                        eprintln!("Add r{dr}, r{sr1}, r{sr2}");
+                        info!("Add r{dr}, r{sr1}, r{sr2}");
 
                         self.reg[dr] = self.reg[sr1] + self.reg[sr2];
                     }
@@ -105,7 +106,7 @@ impl Vm {
                     let dr = (inst >> 9 & 0b111) as usize;
                     let offset = sign_ext(inst, 9);
 
-                    eprintln!("Ld r{dr}, offset: {:#x}", offset);
+                    info!("Ld r{dr}, offset: {:#x}", offset);
 
                     self.reg[dr] = self.read_mem(self.pc + offset);
                     self.set_cc(dr);
@@ -114,7 +115,7 @@ impl Vm {
                     let sr = (inst >> 9 & 0b111) as usize;
                     let offset = sign_ext(inst, 9);
 
-                    eprintln!("St r{sr} offset: {:#x}", offset);
+                    info!("St r{sr} offset: {:#x}", offset);
 
                     self.write_mem(self.pc + offset, self.reg[sr]);
                 }
@@ -123,14 +124,14 @@ impl Vm {
                     self.pc = if inst & (1 << 11) != 0 {
                         let offset = sign_ext(inst, 11);
 
-                        eprintln!("Jsr offset: {:#x}", offset);
+                        info!("Jsr offset: {:#x}", offset);
 
                         self.pc + offset
                     } else {
                         let br = (inst >> 6 & 0b111) as usize;
                         let br_val = self.reg[br];
 
-                        eprintln!("Jsr br_val: {}", br_val);
+                        info!("Jsr br_val: {}", br_val);
                         br_val
                     };
 
@@ -143,13 +144,13 @@ impl Vm {
                     if inst & (1 << 5) != 0 {
                         let imm5 = sign_ext(inst, 5);
 
-                        eprintln!("And r{dr}, r{sr1}, #{imm5}");
+                        info!("And r{dr}, r{sr1}, #{imm5}");
 
                         self.reg[dr] = self.reg[sr1] & imm5;
                     } else {
                         let sr2 = (inst & 0b111) as usize;
 
-                        eprintln!("And r{dr}, r{sr1}, r{sr2}");
+                        info!("And r{dr}, r{sr1}, r{sr2}");
 
                         self.reg[dr] = self.reg[sr1] & self.reg[sr2];
                     }
@@ -161,7 +162,7 @@ impl Vm {
                     let br = (inst >> 6 & 0b111) as usize;
                     let offset = sign_ext(inst, 6);
 
-                    eprintln!("Ldr r{dr}, br: {br}, offset: {:#x}", offset);
+                    info!("Ldr r{dr}, br: {br}, offset: {:#x}", offset);
 
                     let addr = self.reg[br] + offset;
                     self.reg[dr] = self.read_mem(addr);
@@ -173,7 +174,7 @@ impl Vm {
                     let br = (inst >> 6 & 0b111) as usize;
                     let offset = sign_ext(inst, 6);
 
-                    eprintln!("Str r{sr}, br: {br}, offset: {:#x}", offset);
+                    info!("Str r{sr}, br: {br}, offset: {:#x}", offset);
 
                     let addr = self.reg[br] + offset;
                     self.write_mem(addr, self.reg[sr]);
@@ -182,7 +183,7 @@ impl Vm {
                     let dr = (inst >> 9 & 0b111) as usize;
                     let sr1 = (inst >> 6 & 0b111) as usize;
 
-                    eprintln!("Not r{dr}, r{sr1}");
+                    info!("Not r{dr}, r{sr1}");
 
                     self.reg[dr] = !self.reg[sr1];
 
@@ -193,7 +194,7 @@ impl Vm {
                     let offset = sign_ext(inst, 9);
                     let addr = self.read_mem(self.pc + offset);
 
-                    eprintln!("Ldi r{dr} offset: {:#x}", offset);
+                    info!("Ldi r{dr} offset: {:#x}", offset);
 
                     self.reg[dr] = self.read_mem(addr);
                     self.set_cc(dr);
@@ -202,7 +203,7 @@ impl Vm {
                     let sr = (inst >> 9 & 0b111) as usize;
                     let offset = sign_ext(inst, 9);
 
-                    eprintln!("Sti r{sr} offset: {:#x}", offset);
+                    info!("Sti r{sr} offset: {:#x}", offset);
 
                     let addr = self.read_mem(self.pc + offset);
 
@@ -211,7 +212,7 @@ impl Vm {
                 Opcode::Jmp => {
                     let br = (inst >> 6 & 0b111) as usize;
 
-                    eprintln!("Jmp {br}");
+                    info!("Jmp {br}");
 
                     self.pc = self.reg[br];
                 }
@@ -219,7 +220,7 @@ impl Vm {
                     let dr = (inst >> 9 & 0b111) as usize;
                     let offset = sign_ext(inst, 9);
 
-                    eprintln!("Lea r{dr} offset: {:#x}", offset);
+                    info!("Lea r{dr} offset: {:#x}", offset);
 
                     self.reg[dr] = self.pc + offset;
                     self.set_cc(dr);
@@ -229,7 +230,7 @@ impl Vm {
                     self.reg[7] = self.pc;
 
                     let trap = inst & 0xFF;
-                    eprintln!("Trap {trap}");
+                    info!("Trap {trap}");
 
                     match trap {
                         0x20 => {

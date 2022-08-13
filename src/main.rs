@@ -20,6 +20,8 @@ fn try_main() -> Result<()> {
     let mut args = std::env::args();
     args.next();
 
+    env_logger::init();
+
     let file = match args.next() {
         Some(file) => file,
         None => {

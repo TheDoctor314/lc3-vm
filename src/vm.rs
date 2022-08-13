@@ -58,11 +58,21 @@ impl Vm {
 
             let op: Opcode = (inst >> 12).try_into().unwrap();
 
+            eprintln!("inst: {inst:#x} pc: {:#x}", self.pc - 1);
+
             match op {
                 Opcode::Br => {
                     let nzp = inst >> 9 & 0b111;
-                    if nzp & (self.psr & 0b111) != 0 {
-                        self.pc += sign_ext(inst, 9);
+                    let current_nzp = self.psr & 0b111;
+                    let offset = sign_ext(inst, 9);
+
+                    eprintln!(
+                        "Br current: {}, desired: {}, offset: {:#x}",
+                        current_nzp, nzp, offset
+                    );
+
+                    if nzp & current_nzp != 0 {
+                        self.pc += offset;
                     }
                 }
                 Opcode::Add => {
@@ -71,9 +81,15 @@ impl Vm {
 
                     if inst & (1 << 5) != 0 {
                         let imm5 = sign_ext(inst, 5);
+
+                        eprintln!("Add r{dr}, r{sr1}, #{imm5}");
+
                         self.reg[dr] = self.reg[sr1] + imm5;
                     } else {
                         let sr2 = (inst & 0b111) as usize;
+
+                        eprintln!("Add r{dr}, r{sr1}, r{sr2}");
+
                         self.reg[dr] = self.reg[sr1] + self.reg[sr2];
                     }
 
@@ -81,21 +97,35 @@ impl Vm {
                 }
                 Opcode::Ld => {
                     let dr = (inst >> 9 & 0b111) as usize;
+                    let offset = sign_ext(inst, 9);
 
-                    self.reg[dr] = self.read_mem(self.pc + sign_ext(inst, 9));
+                    eprintln!("Ld r{dr}, offset: {:#x}", offset);
+
+                    self.reg[dr] = self.read_mem(self.pc + offset);
                     self.set_cc(dr);
                 }
                 Opcode::St => {
                     let sr = (inst >> 9 & 0b111) as usize;
+                    let offset = sign_ext(inst, 9);
 
-                    self.write_mem(self.pc + sign_ext(inst, 9), self.reg[sr]);
+                    eprintln!("St r{sr} offset: {:#x}", offset);
+
+                    self.write_mem(self.pc + offset, self.reg[sr]);
                 }
                 Opcode::Jsr => {
                     let temp = self.pc;
                     self.pc = if inst & (1 << 11) != 0 {
-                        self.pc + sign_ext(inst, 11)
+                        let offset = sign_ext(inst, 11);
+
+                        eprintln!("Jsr offset: {:#x}", offset);
+
+                        self.pc + offset
                     } else {
-                        inst >> 6 & 0b111
+                        let br = (inst >> 6 & 0b111) as usize;
+                        let br_val = self.reg[br];
+
+                        eprintln!("Jsr br_val: {}", br_val);
+                        br_val
                     };
 
                     self.reg[7] = temp;
@@ -106,9 +136,15 @@ impl Vm {
 
                     if inst & (1 << 5) != 0 {
                         let imm5 = sign_ext(inst, 5);
+
+                        eprintln!("And r{dr}, r{sr1}, #{imm5}");
+
                         self.reg[dr] = self.reg[sr1] & imm5;
                     } else {
                         let sr2 = (inst & 0b111) as usize;
+
+                        eprintln!("And r{dr}, r{sr1}, r{sr2}");
+
                         self.reg[dr] = self.reg[sr1] & self.reg[sr2];
                     }
 
@@ -117,8 +153,11 @@ impl Vm {
                 Opcode::Ldr => {
                     let dr = (inst >> 9 & 0b111) as usize;
                     let br = (inst >> 6 & 0b111) as usize;
+                    let offset = sign_ext(inst, 6);
 
-                    let addr = self.reg[br] + sign_ext(inst, 6);
+                    eprintln!("Ldr r{dr}, br: {br}, offset: {:#x}", offset);
+
+                    let addr = self.reg[br] + offset;
                     self.reg[dr] = self.read_mem(addr);
 
                     self.set_cc(dr);
@@ -126,13 +165,18 @@ impl Vm {
                 Opcode::Str => {
                     let sr = (inst >> 9 & 0b111) as usize;
                     let br = (inst >> 6 & 0b111) as usize;
+                    let offset = sign_ext(inst, 6);
 
-                    let addr = self.reg[br] + sign_ext(inst, 6);
+                    eprintln!("Str r{sr}, br: {br}, offset: {:#x}", offset);
+
+                    let addr = self.reg[br] + offset;
                     self.write_mem(addr, self.reg[sr]);
                 }
                 Opcode::Not => {
                     let dr = (inst >> 9 & 0b111) as usize;
                     let sr1 = (inst >> 6 & 0b111) as usize;
+
+                    eprintln!("Not r{dr}, r{sr1}");
 
                     self.reg[dr] = !self.reg[sr1];
 
@@ -140,32 +184,48 @@ impl Vm {
                 }
                 Opcode::Ldi => {
                     let dr = (inst >> 9 & 0b111) as usize;
-                    let addr = self.read_mem(self.pc + sign_ext(inst, 9));
+                    let offset = sign_ext(inst, 9);
+                    let addr = self.read_mem(self.pc + offset);
+
+                    eprintln!("Ldi r{dr} offset: {:#x}", offset);
 
                     self.reg[dr] = self.read_mem(addr);
                     self.set_cc(dr);
                 }
                 Opcode::Sti => {
                     let sr = (inst >> 9 & 0b111) as usize;
-                    let addr = self.read_mem(self.pc + sign_ext(inst, 9));
+                    let offset = sign_ext(inst, 9);
+
+                    eprintln!("Sti r{sr} offset: {:#x}", offset);
+
+                    let addr = self.read_mem(self.pc + offset);
 
                     self.write_mem(addr, self.reg[sr]);
                 }
                 Opcode::Jmp => {
                     let br = (inst >> 6 & 0b111) as usize;
+
+                    eprintln!("Jmp {br}");
+
                     self.pc = self.reg[br];
                 }
                 Opcode::Lea => {
                     let dr = (inst >> 9 & 0b111) as usize;
-                    let addr = self.pc + sign_ext(inst, 9);
+                    let offset = sign_ext(inst, 9);
 
-                    self.reg[dr] = addr;
+                    eprintln!("Lea r{dr} offset: {:#x}", offset);
+
+                    self.reg[dr] = self.pc + offset;
                     self.set_cc(dr);
                 }
                 Opcode::Trap => {
                     // implement traps in assembly or rust?
                     self.reg[7] = self.pc;
-                    match inst & 0xFF {
+
+                    let trap = inst & 0xFF;
+                    eprintln!("Trap {trap}");
+
+                    match trap {
                         0x20 => {
                             self.reg[0] = getch().unwrap_or_default() as u16;
                             self.set_cc(0);
@@ -220,15 +280,17 @@ impl Vm {
                         _ => unimplemented!("Bad trap"),
                     }
                 }
-                Opcode::Rti | Opcode::Reserved => unimplemented!("Bad opcode"),
+                Opcode::Rti | Opcode::Reserved => unimplemented!("Bad opcode: {op:?}"),
             }
         }
     }
 
+    // TODO: Implement memeory mapped registers
     fn read_mem(&self, addr: u16) -> u16 {
         self.memory[addr as usize]
     }
 
+    // TODO: Implement memeory mapped registers
     fn write_mem(&mut self, addr: u16, val: u16) {
         self.memory[addr as usize] = val;
     }

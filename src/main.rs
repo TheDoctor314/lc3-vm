@@ -5,6 +5,8 @@ use std::{
     os::unix::prelude::AsRawFd,
 };
 
+use anyhow::Result;
+use nix::sys::termios;
 use vm::Vm;
 
 fn main() {
@@ -14,7 +16,7 @@ fn main() {
     }
 }
 
-fn try_main() -> anyhow::Result<()> {
+fn try_main() -> Result<()> {
     let mut args = std::env::args();
     args.next();
 
@@ -62,21 +64,24 @@ impl Drop for Terminal {
     fn drop(&mut self) {
         use termios::*;
 
-        let _ = tcsetattr(stdin().as_raw_fd(), TCSAFLUSH, &self.0);
+        tcsetattr(stdin().as_raw_fd(), SetArg::TCSAFLUSH, &self.0).unwrap();
     }
 }
 
-fn enable_raw_mode() -> anyhow::Result<Terminal> {
+fn enable_raw_mode() -> Result<Terminal> {
     use termios::*;
-    let stdin = stdin();
-    let mut termios = Termios::from_fd(stdin.as_raw_fd())?;
 
-    let c_lflag = termios.c_lflag;
-    termios.c_lflag &= !(ECHO | ICANON);
+    let stdin = stdin().as_raw_fd();
+    let mut termios = tcgetattr(stdin)?;
 
-    tcsetattr(stdin.as_raw_fd(), TCSAFLUSH, &termios)?;
+    let local_flags = termios.local_flags;
 
-    termios.c_lflag = c_lflag;
+    let flags_to_remove = LocalFlags::ICANON | LocalFlags::ECHO;
+    termios.local_flags &= flags_to_remove.complement();
+
+    tcsetattr(stdin, SetArg::TCSAFLUSH, &termios)?;
+
+    termios.local_flags = local_flags;
 
     // this struct has now the original attributes of the terminal
     Ok(Terminal(termios))

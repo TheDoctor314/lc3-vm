@@ -61,11 +61,11 @@ impl Vm {
 
         while running {
             let inst = self.read_mem(self.pc);
-            self.pc += 1;
-
             let op: Opcode = (inst >> 12).try_into().unwrap();
 
-            info!("inst: {inst:#x} pc: {:#x}", self.pc - 1);
+            info!("inst: {inst:#x} pc: {:#x}", self.pc);
+
+            self.pc = self.pc.wrapping_add(1);
 
             match op {
                 Opcode::Br => {
@@ -79,7 +79,7 @@ impl Vm {
                     );
 
                     if nzp & current_nzp != 0 {
-                        self.pc += offset;
+                        self.pc = self.pc.wrapping_add(offset);
                     }
                 }
                 Opcode::Add => {
@@ -91,13 +91,13 @@ impl Vm {
 
                         info!("Add r{dr}, r{sr1}, #{imm5}");
 
-                        self.reg[dr] = self.reg[sr1] + imm5;
+                        self.reg[dr] = self.reg[sr1].wrapping_add(imm5);
                     } else {
                         let sr2 = (inst & 0b111) as usize;
 
                         info!("Add r{dr}, r{sr1}, r{sr2}");
 
-                        self.reg[dr] = self.reg[sr1] + self.reg[sr2];
+                        self.reg[dr] = self.reg[sr1].wrapping_add(self.reg[sr2]);
                     }
 
                     self.set_cc(dr);
@@ -108,7 +108,7 @@ impl Vm {
 
                     info!("Ld r{dr}, offset: {:#x}", offset);
 
-                    self.reg[dr] = self.read_mem(self.pc + offset);
+                    self.reg[dr] = self.read_mem(self.pc.wrapping_add(offset));
                     self.set_cc(dr);
                 }
                 Opcode::St => {
@@ -117,7 +117,7 @@ impl Vm {
 
                     info!("St r{sr} offset: {:#x}", offset);
 
-                    self.write_mem(self.pc + offset, self.reg[sr]);
+                    self.write_mem(self.pc.wrapping_add(offset), self.reg[sr]);
                 }
                 Opcode::Jsr => {
                     let temp = self.pc;
@@ -126,7 +126,7 @@ impl Vm {
 
                         info!("Jsr offset: {:#x}", offset);
 
-                        self.pc + offset
+                        self.pc.wrapping_add(offset)
                     } else {
                         let br = (inst >> 6 & 0b111) as usize;
                         let br_val = self.reg[br];
@@ -164,7 +164,7 @@ impl Vm {
 
                     info!("Ldr r{dr}, br: {br}, offset: {:#x}", offset);
 
-                    let addr = self.reg[br] + offset;
+                    let addr = self.reg[br].wrapping_add(offset);
                     self.reg[dr] = self.read_mem(addr);
 
                     self.set_cc(dr);
@@ -176,7 +176,7 @@ impl Vm {
 
                     info!("Str r{sr}, br: {br}, offset: {:#x}", offset);
 
-                    let addr = self.reg[br] + offset;
+                    let addr = self.reg[br].wrapping_add(offset);
                     self.write_mem(addr, self.reg[sr]);
                 }
                 Opcode::Not => {
@@ -192,7 +192,7 @@ impl Vm {
                 Opcode::Ldi => {
                     let dr = (inst >> 9 & 0b111) as usize;
                     let offset = sign_ext(inst, 9);
-                    let addr = self.read_mem(self.pc + offset);
+                    let addr = self.read_mem(self.pc.wrapping_add(offset));
 
                     info!("Ldi r{dr} offset: {:#x}", offset);
 
@@ -205,7 +205,7 @@ impl Vm {
 
                     info!("Sti r{sr} offset: {:#x}", offset);
 
-                    let addr = self.read_mem(self.pc + offset);
+                    let addr = self.read_mem(self.pc.wrapping_add(offset));
 
                     self.write_mem(addr, self.reg[sr]);
                 }
@@ -222,7 +222,7 @@ impl Vm {
 
                     info!("Lea r{dr} offset: {:#x}", offset);
 
-                    self.reg[dr] = self.pc + offset;
+                    self.reg[dr] = self.pc.wrapping_add(offset);
                     self.set_cc(dr);
                 }
                 Opcode::Trap => {

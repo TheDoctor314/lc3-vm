@@ -15,10 +15,19 @@ pub struct Vm {
     psr: u16,
 }
 
+// addresses for the memory mapped regs
 const KBSR: u16 = 0xFE00;
 const KBDR: u16 = 0xFE02;
 const DSR: u16 = 0xFE04;
 const DDR: u16 = 0xFE06;
+
+// traps
+const GETC: u16 = 0x20;
+const OUT: u16 = 0x21;
+const PUTS: u16 = 0x22;
+const IN: u16 = 0x23;
+const PUTSP: u16 = 0x24;
+const HALT: u16 = 0x25;
 
 impl Vm {
     pub fn new(pc: u16, psr: u16) -> Self {
@@ -233,15 +242,15 @@ impl Vm {
                     info!("Trap {trap}");
 
                     match trap {
-                        0x20 => {
+                        GETC => {
                             self.reg[0] = getch().unwrap_or_default() as u16;
                             self.set_cc(0);
                         }
-                        0x21 => {
+                        OUT => {
                             let byte = self.reg[0] as u8;
                             let _ = stdout().write(&[byte]).unwrap();
                         }
-                        0x22 => {
+                        PUTS => {
                             let addr = self.reg[0] as usize;
                             let slice = &self.memory[addr..];
                             let end = slice.iter().position(|w| *w == 0x0000).unwrap_or_default();
@@ -255,7 +264,7 @@ impl Vm {
 
                             stdout.flush().unwrap();
                         }
-                        0x23 => {
+                        IN => {
                             let mut stdout = stdout().lock();
                             write!(stdout, "Enter a character: ").unwrap();
                             stdout.flush().unwrap();
@@ -263,7 +272,7 @@ impl Vm {
                             let ch = getch().unwrap_or_default();
                             let _ = stdout.write(&[ch]).unwrap();
                         }
-                        0x24 => {
+                        PUTSP => {
                             let addr = self.reg[0] as usize;
                             let slice = &self.memory[addr..];
 
@@ -280,7 +289,7 @@ impl Vm {
 
                             stdout.flush().unwrap();
                         }
-                        0x25 => {
+                        HALT => {
                             println!("HALT");
                             running = false;
                         }
